@@ -84,20 +84,20 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
         context.log("Messages retrieved:", messages);
 
         // Find the latest assistant message(s)
-        let assistantMessage: string = "";
+        let lastAssistantMessage = null;
 
         for await (const m of messages) {
             const content = m.content.find((c) => c.type === "text" && "text" in c);
             console.log("Processing message:", m.content);
             if (m.role === "assistant" && content) {
-                assistantMessage = content.text.value;
+                lastAssistantMessage = m; // Save the whole object
             }
         }
-        context.log("Assistant messages:", assistantMessage);
+        context.log("Assistant messages:", lastAssistantMessage);
 
         return {
             body: JSON.stringify({
-                message: assistantMessage
+                message: JSON.stringify(lastAssistantMessage)
             })
         };
     } catch (err: any) {
