@@ -84,13 +84,13 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
         context.log("Messages retrieved:", messages);
 
         // Find the latest assistant message(s)
-        let assistantMessage: any | undefined = undefined;
+        let assistantMessage: string = "";
 
         for await (const m of messages) {
             const content = m.content.find((c) => c.type === "text" && "text" in c);
             console.log("Processing message:", m.content);
             if (m.role === "assistant" && content) {
-                assistantMessage = m.content;
+                assistantMessage = content.text.value;
             }
         }
         context.log("Assistant messages:", assistantMessage);
