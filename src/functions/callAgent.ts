@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import { AIProjectsClient } from "@azure/ai-projects";
+import { AIProjectClient } from "@azure/ai-projects";
 import { DefaultAzureCredential } from "@azure/identity";
+
 
 export async function callAgent(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Http function processed request for url "${request.url}"`);
@@ -10,9 +11,10 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
         return { status: 405, body: "Method Not Allowed. Only POST is supported." };
     }
 
-    // Extract agentId and message from POST body, fallback to env for agentId
+    // Extract agentId, message, and threadId from POST body
     let agentId = process.env.AIFOUNDRY_AGENT_ID;
     let userMessage: string | undefined = undefined;
+    let threadId: string | undefined = undefined;
 
     try {
         const body = await request.json() as any;
@@ -26,8 +28,12 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
             userMessage = body.message.trim();
             context.log("User message found in POST body:", userMessage);
         }
+        if (body && typeof body.threadId === "string" && body.threadId.trim() !== "") {
+            threadId = body.threadId.trim();
+            context.log("threadId found in POST body:", threadId);
+        }
     } catch (e) {
-        context.log("POST body is not valid JSON or missing agent/message.");
+        context.log("POST body is not valid JSON or missing agent/message/threadId.");
     }
 
     if (!userMessage) {
@@ -35,31 +41,31 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
     }
     context.log("User message:", userMessage);
 
+    if (!threadId) {
+        return { status: 400, body: "Missing required parameter: threadId" };
+    }
+
     try {
         // Initialize client
-        const client = AIProjectsClient.fromConnectionString(
+        const client = new AIProjectClient(
             process.env.AIFOUNDRY_CONNECTION_STRING!,
             new DefaultAzureCredential()
         );
-        context.log("AIProjectsClient initialized.");
+        context.log("AIProjectClient initialized.");
 
         // Get agent
         const agent = await client.agents.getAgent(agentId);
         context.log("Agent retrieved:", agent);
 
-        // Create a new thread
-        const thread = await client.agents.createThread();
-        context.log("Thread created:", thread);
+        // Use provided threadId
+        context.log("Using threadId:", threadId);
 
         // Post user message
-        const message = await client.agents.createMessage(thread.id, {
-            role: "user",
-            content: userMessage
-        });
+        const message = await client.agents.messages.create(threadId, "user", userMessage);
         context.log("User message posted:", message);
 
         // Create run
-        let run = await client.agents.createRun(thread.id, agent.id);
+        let run = await client.agents.runs.create(threadId, agent.id);
         context.log("Run created:", run);
 
         // Poll until the run reaches a terminal status
@@ -69,25 +75,21 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
         ) {
             context.log(`Run status: ${run.status}. Waiting...`);
             await new Promise((resolve) => setTimeout(resolve, 1000));
-            run = await client.agents.getRun(thread.id, run.id);
+            run = await client.agents.runs.get(threadId, run.id);
         }
         context.log("Run completed with status:", run.status);
 
         // Retrieve messages
-        const messages = await client.agents.listMessages(thread.id);
+        const messages = await client.agents.messages.list(threadId, { order: "asc" });
         context.log("Messages retrieved:", messages);
 
         // Find the latest assistant message(s)
-        const assistantMessages = messages.data
-            .filter(msg => msg.role === "assistant")
-            .map(msg =>
-                msg.content
-                    .filter(item => item.type === "text" && typeof (item as any).text?.value === "string")
-                    .map(item => (item as any).text.value)
-                    .join("\n")
-            )
-            .filter(Boolean);
+        const assistantMessages = [];
 
+        for await (const m of messages) {
+            const content = m.content.find((c) => c.type === "text" && "text" in c);
+            console.log("Processing message:", m.id, content);
+        }
         context.log("Assistant messages:", assistantMessages);
 
         const responseText = assistantMessages.length > 0
