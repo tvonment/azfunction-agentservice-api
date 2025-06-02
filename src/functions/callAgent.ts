@@ -84,25 +84,20 @@ export async function callAgent(request: HttpRequest, context: InvocationContext
         context.log("Messages retrieved:", messages);
 
         // Find the latest assistant message(s)
-        const assistantMessages = [];
+        let assistantMessage: any | undefined = undefined;
 
         for await (const m of messages) {
             const content = m.content.find((c) => c.type === "text" && "text" in c);
-            console.log("Processing message:", m.id, content);
+            console.log("Processing message:", m.content);
+            if (m.role === "assistant" && content) {
+                assistantMessage = m.content;
+            }
         }
-        context.log("Assistant messages:", assistantMessages);
-
-        const responseText = assistantMessages.length > 0
-            ? assistantMessages.join("\n\n")
-            : "No assistant response.";
-
-        if (responseText === "No assistant response.") {
-            context.warn("No assistant response found in messages.");
-        }
+        context.log("Assistant messages:", assistantMessage);
 
         return {
             body: JSON.stringify({
-                message: responseText
+                message: assistantMessage
             })
         };
     } catch (err: any) {
