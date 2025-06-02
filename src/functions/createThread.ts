@@ -26,7 +26,7 @@ export async function createThread(request: HttpRequest, context: InvocationCont
 };
 
 app.http('createThread', {
-    methods: ['GET'],
+    methods: ['GET', 'POST'],
     authLevel: 'anonymous',
     handler: createThread,
     route: 'thread',

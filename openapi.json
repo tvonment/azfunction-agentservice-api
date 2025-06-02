@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "https://agents-workshop-dummy-api.azurewebsites.net/"
+            "url": "https://mf-fabricdemo-func-etf9gebuaqe9c6ha.swedencentral-01.azurewebsites.net/"
         }
     ],
     "paths": {
